@@ -11,7 +11,7 @@ namespace UserJoinLeaveNotifications
     {
         public override string Name => "UserJoinLeaveNotifications";
         public override string Author => "badhaloninja";
-        public override string Version => "1.1.0";
+        public override string Version => "1.1.1";
         public override string Link => "https://github.com/badhaloninja/UserJoinLeaveNotifications";
         public override void OnEngineInit()
         {
@@ -25,7 +25,6 @@ namespace UserJoinLeaveNotifications
             public static void Postfix(NotificationPanel __instance)
             {
                 new NewNotificationHandler().Setup(__instance);
-
             }
 
             // HarmonyReversePatch has to be under a harmony patch class???
@@ -62,45 +61,48 @@ namespace UserJoinLeaveNotifications
                  * 
                  */
                 
-                getUserbag(oldFocusedWorld).OnElementAdded -= OnUserJoined;
-                getUserbag(oldFocusedWorld).OnElementRemoved -= OnUserLeft;
-                /*oldFocusedWorld.UserJoined -= OnUserJoined;
-                oldFocusedWorld.UserLeft -= OnUserLeft;*/
+                GetUserbag(oldFocusedWorld).OnElementAdded -= OnUserJoined;
+                GetUserbag(oldFocusedWorld).OnElementRemoved -= OnUserLeft;
             }
             private void OnWorldFocused(World newFocusedWorld)
             {
                 if (oldFocusedWorld != null)
                 {
-                    getUserbag(oldFocusedWorld).OnElementAdded -= OnUserJoined;
-                    getUserbag(oldFocusedWorld).OnElementRemoved -= OnUserLeft;
-                    /*oldFocusedWorld.UserJoined -= OnUserJoined;
-                    oldFocusedWorld.UserLeft -= OnUserLeft;*/
+                    GetUserbag(oldFocusedWorld).OnElementAdded -= OnUserJoined;
+                    GetUserbag(oldFocusedWorld).OnElementRemoved -= OnUserLeft;
                 }
-
-                getUserbag(newFocusedWorld).OnElementAdded += OnUserJoined;
-                getUserbag(newFocusedWorld).OnElementRemoved += OnUserLeft;
-                /*newFocusedWorld.UserJoined += OnUserJoined;
-                newFocusedWorld.UserLeft += OnUserLeft;*/
+                GetUserbag(newFocusedWorld).OnElementAdded += OnUserJoined;
+                GetUserbag(newFocusedWorld).OnElementRemoved += OnUserLeft;
 
                 oldFocusedWorld = newFocusedWorld;
             }
             private void OnUserJoined(SyncBagBase<RefID, User> bag, RefID key, User user, bool isNew)
             {
                 if (user.IsLocalUser) return;
-                notificationPanel.RunSynchronously(() =>
-                { // Events are nonlocking threads
-                    notifPanelPatch.AddNotification(notificationPanel, user.UserID, String.Format("{0} joined", user.UserName), null, MathX.Lerp(color.Blue, color.White, 0.5f), "N/A", null, null);
+                notificationPanel.RunInUpdates(3, async () =>
+                { // Running immediately results in the getuser to return a BadRequest
+                    var cloudUserProfile = (await Engine.Current.Cloud.GetUser(user.UserID))?.Entity?.Profile;
+                    // Handle fetching profile, AddNotification only gets profile data for friends
+                    var thumbnail = CloudX.Shared.CloudXInterface.TryFromString(cloudUserProfile?.IconUrl) ?? NeosAssets.Graphics.Thumbnails.AnonymousHeadset;
+                    notificationPanel.RunSynchronously(() =>
+                    { // Events are nonlocking threads
+                        notifPanelPatch.AddNotification(notificationPanel, null, string.Format("{0} joined", user.UserName), null, MathX.Lerp(color.Blue, color.White, 0.5f), "User Joined", thumbnail, null);
+                    });
                 });
+                
             }
-            private void OnUserLeft(SyncBagBase<RefID, User> bag, RefID key, User user)
+            private async void OnUserLeft(SyncBagBase<RefID, User> bag, RefID key, User user)
             {
                 if (user.IsLocalUser) return;
+                var cloudUserProfile = (await Engine.Current.Cloud.GetUser(user.UserID))?.Entity?.Profile;
+                // Handle fetching profile, AddNotification only gets profile data for friends
+                var thumbnail = CloudX.Shared.CloudXInterface.TryFromString(cloudUserProfile?.IconUrl) ?? NeosAssets.Graphics.Thumbnails.AnonymousHeadset;
                 notificationPanel.RunSynchronously(() =>
-                {
-                    notifPanelPatch.AddNotification(notificationPanel, user.UserID, String.Format("{0} left", user.UserName), null, MathX.Lerp(color.Red, color.White, 0.5f), "N/A", null, null);
+                { // Events are nonlocking threads
+                    notifPanelPatch.AddNotification(notificationPanel, null, string.Format("{0} left", user.UserName), null, MathX.Lerp(color.Red, color.White, 0.5f), "User Left", thumbnail, null);
                 });
             }
-            private static UserBag getUserbag(World world)
+            private static UserBag GetUserbag(World world)
             { // Return the user bag field
                 return Traverse.Create(world).Field("_users").GetValue<UserBag>();
             }
