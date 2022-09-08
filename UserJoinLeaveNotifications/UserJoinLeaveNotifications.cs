@@ -13,19 +13,34 @@ namespace UserJoinLeaveNotifications
     {
         public override string Name => "UserJoinLeaveNotifications";
         public override string Author => "badhaloninja";
-        public override string Version => "1.2.0";
+        public override string Version => "1.3.0";
         public override string Link => "https://github.com/badhaloninja/UserJoinLeaveNotifications";
         public override void OnEngineInit()
         {
+            config = GetConfiguration();
+            config.OnThisConfigurationChanged += UpdateAssets;
+
+            
             Engine.Current.RunPostInit(Setup);
         }
-        
 
+
+        [AutoRegisterConfigKey]
+        private static readonly ModConfigurationKey<Uri> NotificationSoundUri = new ModConfigurationKey<Uri>("NotificationSound", "Notification sound for user joining or leaving - Disabled when null", () => null);
+        
+        [AutoRegisterConfigKey]
+        private static readonly ModConfigurationKey<bool> OverrideLeaveSound = new ModConfigurationKey<bool>("OverrideLeaveSound", "Override the notification sound for leaving", () => false);
+        [AutoRegisterConfigKey]
+        private static readonly ModConfigurationKey<Uri> NotificationLeaveSoundUri = new ModConfigurationKey<Uri>("NotificationLeaveSound", "Notification sound for leaving - Only used if override is enabled - Disabled when null", () => null);
+
+        private static ModConfiguration config;
         private static MethodInfo addNotification;
 
         private static UserBag currentUserBag;
-        
-        
+
+        private static StaticAudioClip joinLeaveAudioClip;
+        private static StaticAudioClip leaveAudioClip;
+
         public static void Setup()
         {
             // Hook into the world focused event
@@ -54,12 +69,11 @@ namespace UserJoinLeaveNotifications
         {
             if (user.IsLocalUser) return;
             if (NotificationPanel.Current == null) return;
-            
+
             NotificationPanel.Current.RunInUpdates(3, async () =>
             { // Running immediately results in the getuser to return a BadRequest
                 Uri thumbnail = await GetUserThumbnail(user.UserID);
-                
-                AddNotification(string.Format("{0} joined", user.UserName),MathX.Lerp(color.Blue, color.White, 0.5f), "User Joined", thumbnail);
+                AddNotification(string.Format("{0} joined", user.UserName),MathX.Lerp(color.Blue, color.White, 0.5f), "User Joined", thumbnail, false);
             });
         }
 
@@ -69,7 +83,7 @@ namespace UserJoinLeaveNotifications
             if (NotificationPanel.Current == null) return;
             
             Uri thumbnail = await GetUserThumbnail(user.UserID);
-            AddNotification(string.Format("{0} left", user.UserName), MathX.Lerp(color.Red, color.White, 0.5f), "User Left", thumbnail);
+            AddNotification(string.Format("{0} left", user.UserName), MathX.Lerp(color.Red, color.White, 0.5f), "User Left", thumbnail, true);
         }
 
         
@@ -87,15 +101,46 @@ namespace UserJoinLeaveNotifications
         { // Return the user bag field
             return Traverse.Create(world).Field("_users").GetValue<UserBag>();
         }
-        
-        private static void AddNotification(string message, color backgroundColor, string mainMessage, Uri overrideProfile)
+
+        private static void AddNotification(string message, color backgroundColor, string mainMessage, Uri overrideProfile, bool UserLeaving)
         {
             // Not using Show Notification because it does not expose main message
-            if (NotificationPanel.Current == null) return;
+            if (addNotification == null || NotificationPanel.Current == null) return;
+
             NotificationPanel.Current.RunSynchronously(() =>
             { // ;-;
-                addNotification.Invoke(NotificationPanel.Current, new object[] { null, message, null, backgroundColor, mainMessage, overrideProfile, null });
+                if (joinLeaveAudioClip == null)
+                {
+                    joinLeaveAudioClip = NotificationPanel.Current.Slot.AttachComponent<StaticAudioClip>();
+                    joinLeaveAudioClip.URL.Value = config.GetValue(NotificationSoundUri);
+                }
+                if (leaveAudioClip == null)
+                {
+                    leaveAudioClip = NotificationPanel.Current.Slot.AttachComponent<StaticAudioClip>();
+                    leaveAudioClip.URL.Value = config.GetValue(NotificationLeaveSoundUri);
+                }
+
+                StaticAudioClip clip = (joinLeaveAudioClip.URL.Value != null) ? joinLeaveAudioClip : null;
+
+                if (UserLeaving && config.GetValue(OverrideLeaveSound))
+                {
+                    clip = (leaveAudioClip.URL.Value != null) ? leaveAudioClip : null;
+                }
+                
+                addNotification.Invoke(NotificationPanel.Current, new object[] { null, message, null, backgroundColor, mainMessage, overrideProfile, clip });
             });
+        }
+        
+        private void UpdateAssets(ConfigurationChangedEvent @event)
+        {
+            if (@event.Key == NotificationSoundUri && joinLeaveAudioClip != null)
+            {
+                joinLeaveAudioClip.URL.Value = config.GetValue(NotificationSoundUri);
+            }
+            if (@event.Key == NotificationLeaveSoundUri && leaveAudioClip != null)
+            {
+                leaveAudioClip.URL.Value = config.GetValue(NotificationLeaveSoundUri);
+            }
         }
     }
 }
