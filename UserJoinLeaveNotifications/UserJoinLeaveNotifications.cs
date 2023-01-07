@@ -13,7 +13,7 @@ namespace UserJoinLeaveNotifications
     {
         public override string Name => "UserJoinLeaveNotifications";
         public override string Author => "badhaloninja";
-        public override string Version => "1.3.0";
+        public override string Version => "1.4.0";
         public override string Link => "https://github.com/badhaloninja/UserJoinLeaveNotifications";
         public override void OnEngineInit()
         {
@@ -32,7 +32,9 @@ namespace UserJoinLeaveNotifications
         private static readonly ModConfigurationKey<bool> OverrideLeaveSound = new ModConfigurationKey<bool>("OverrideLeaveSound", "Override the notification sound for leaving", () => false);
         [AutoRegisterConfigKey]
         private static readonly ModConfigurationKey<Uri> NotificationLeaveSoundUri = new ModConfigurationKey<Uri>("NotificationLeaveSound", "Notification sound for leaving - Only used if override is enabled - Disabled when null", () => null);
-
+        [AutoRegisterConfigKey]
+        private static readonly ModConfigurationKey<bool> FriendLinks = new ModConfigurationKey<bool>("FriendLinks", "Add FriendLinks to notifications, can make notifiacation titles only show username", () => true);
+        
         private static ModConfiguration config;
         private static MethodInfo addNotification;
 
@@ -73,7 +75,7 @@ namespace UserJoinLeaveNotifications
             NotificationPanel.Current.RunInUpdates(3, async () =>
             { // Running immediately results in the getuser to return a BadRequest
                 Uri thumbnail = await GetUserThumbnail(user.UserID);
-                AddNotification(string.Format("{0} joined", user.UserName),MathX.Lerp(color.Blue, color.White, 0.5f), "User Joined", thumbnail, false);
+                AddNotification(user.UserID ,string.Format("{0} joined", user.UserName),MathX.Lerp(color.Blue, color.White, 0.5f), "User Joined", thumbnail, false);
             });
         }
 
@@ -83,7 +85,7 @@ namespace UserJoinLeaveNotifications
             if (NotificationPanel.Current == null) return;
             
             Uri thumbnail = await GetUserThumbnail(user.UserID);
-            AddNotification(string.Format("{0} left", user.UserName), MathX.Lerp(color.Red, color.White, 0.5f), "User Left", thumbnail, true);
+            AddNotification(user.UserID, string.Format("{0} left", user.UserName), MathX.Lerp(color.Red, color.White, 0.5f), "User Left", thumbnail, true);
         }
 
         
@@ -102,7 +104,7 @@ namespace UserJoinLeaveNotifications
             return Traverse.Create(world).Field("_users").GetValue<UserBag>();
         }
 
-        private static void AddNotification(string message, color backgroundColor, string mainMessage, Uri overrideProfile, bool UserLeaving)
+        private static void AddNotification(string userId, string message, color backgroundColor, string mainMessage, Uri overrideProfile, bool UserLeaving)
         {
             // Not using Show Notification because it does not expose main message
             if (addNotification == null || NotificationPanel.Current == null) return;
@@ -127,7 +129,7 @@ namespace UserJoinLeaveNotifications
                     clip = (leaveAudioClip.URL.Value != null) ? leaveAudioClip : null;
                 }
                 
-                addNotification.Invoke(NotificationPanel.Current, new object[] { null, message, null, backgroundColor, mainMessage, overrideProfile, clip });
+                addNotification.Invoke(NotificationPanel.Current, new object[] { config.GetValue(FriendLinks) ? userId : null, message, null, backgroundColor, mainMessage, overrideProfile, clip });
             });
         }
         
