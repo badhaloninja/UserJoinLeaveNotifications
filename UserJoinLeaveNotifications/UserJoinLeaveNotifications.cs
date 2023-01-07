@@ -32,7 +32,9 @@ namespace UserJoinLeaveNotifications
         private static readonly ModConfigurationKey<bool> OverrideLeaveSound = new ModConfigurationKey<bool>("OverrideLeaveSound", "Override the notification sound for leaving", () => false);
         [AutoRegisterConfigKey]
         private static readonly ModConfigurationKey<Uri> NotificationLeaveSoundUri = new ModConfigurationKey<Uri>("NotificationLeaveSound", "Notification sound for leaving - Only used if override is enabled - Disabled when null", () => null);
-
+        [AutoRegisterConfigKey]
+        private static readonly ModConfigurationKey<bool> FriendLinks = new ModConfigurationKey<bool>("FriendLinks", "Add FriendLinks to notifications, can make notifiacation titles only show username", () => true);
+        
         private static ModConfiguration config;
         private static MethodInfo addNotification;
 
@@ -127,7 +129,7 @@ namespace UserJoinLeaveNotifications
                     clip = (leaveAudioClip.URL.Value != null) ? leaveAudioClip : null;
                 }
                 
-                addNotification.Invoke(NotificationPanel.Current, new object[] { userId, message, null, backgroundColor, mainMessage, overrideProfile, clip });
+                addNotification.Invoke(NotificationPanel.Current, new object[] { config.GetValue(FriendLinks) ? userId : null, message, null, backgroundColor, mainMessage, overrideProfile, clip });
             });
         }
         
