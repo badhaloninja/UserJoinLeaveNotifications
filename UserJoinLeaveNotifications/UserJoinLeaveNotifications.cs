@@ -13,7 +13,7 @@ namespace UserJoinLeaveNotifications
     {
         public override string Name => "UserJoinLeaveNotifications";
         public override string Author => "badhaloninja";
-        public override string Version => "1.4.0";
+        public override string Version => "1.4.1";
         public override string Link => "https://github.com/badhaloninja/UserJoinLeaveNotifications";
         public override void OnEngineInit()
         {
