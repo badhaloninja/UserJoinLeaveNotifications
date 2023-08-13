@@ -24,6 +24,8 @@ namespace UserJoinLeaveNotifications
             Engine.Current.RunPostInit(Setup);
         }
 
+        [AutoRegisterConfigKey]
+        private static readonly ModConfigurationKey<bool> SoundsEnabled = new ModConfigurationKey<bool>("SoundsEnabled", "Enable playing sounds when a user joins or leaves", () => false);
 
         [AutoRegisterConfigKey]
         private static readonly ModConfigurationKey<Uri> NotificationSoundUri = new ModConfigurationKey<Uri>("NotificationSound", "Notification sound for user joining or leaving - Disabled when null", () => null);
@@ -95,15 +97,19 @@ namespace UserJoinLeaveNotifications
 
             NotificationPanel.Current.RunSynchronously(() =>
             { // ;-;
-                EnsureAudioClips();
+                StaticAudioClip clip = null;
 
-                StaticAudioClip clip = (joinLeaveAudioClip.URL.Value != null) ? joinLeaveAudioClip : null;
-
-                if (UserLeaving && config.GetValue(OverrideLeaveSound) && leaveAudioClip.URL.Value != null)
+                if (config.GetValue(SoundsEnabled))
                 {
-                    clip = leaveAudioClip;
+                    EnsureAudioClips();
+                    clip = (joinLeaveAudioClip.URL.Value != null) ? joinLeaveAudioClip : null;
+
+                    if (UserLeaving && config.GetValue(OverrideLeaveSound) && leaveAudioClip.URL.Value != null)
+                    {
+                        clip = leaveAudioClip;
+                    }
                 }
-                
+
                 addNotification.Invoke(NotificationPanel.Current, new object[] { config.GetValue(FriendLinks) ? userId : null, message, null, backgroundColor, mainMessage, overrideProfile, clip });
             });
         }
