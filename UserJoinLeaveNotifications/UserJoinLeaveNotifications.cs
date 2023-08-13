@@ -33,7 +33,7 @@ namespace UserJoinLeaveNotifications
         [AutoRegisterConfigKey]
         private static readonly ModConfigurationKey<Uri> NotificationLeaveSoundUri = new ModConfigurationKey<Uri>("NotificationLeaveSound", "Notification sound for leaving - Only used if override is enabled - Disabled when null", () => null);
         [AutoRegisterConfigKey]
-        private static readonly ModConfigurationKey<bool> FriendLinks = new ModConfigurationKey<bool>("FriendLinks", "Add FriendLinks to notifications, can make notifiacation titles only show username", () => true);
+        private static readonly ModConfigurationKey<bool> FriendLinks = new ModConfigurationKey<bool>("FriendLinks", "Add FriendLinks to notifications, can make notification titles only show username", () => true);
         
         private static ModConfiguration config;
         private static MethodInfo addNotification;
@@ -88,8 +88,26 @@ namespace UserJoinLeaveNotifications
             AddNotification(user.UserID, string.Format("{0} left", user.UserName), MathX.Lerp(color.Red, color.White, 0.5f), "User Left", thumbnail, true);
         }
 
-        
-        
+        private static void AddNotification(string userId, string message, color backgroundColor, string mainMessage, Uri overrideProfile, bool UserLeaving)
+        {
+            // Not using Show Notification because it does not expose main message
+            if (addNotification == null || NotificationPanel.Current == null) return;
+
+            NotificationPanel.Current.RunSynchronously(() =>
+            { // ;-;
+                EnsureAudioClips();
+
+                StaticAudioClip clip = (joinLeaveAudioClip.URL.Value != null) ? joinLeaveAudioClip : null;
+
+                if (UserLeaving && config.GetValue(OverrideLeaveSound) && leaveAudioClip.URL.Value != null)
+                {
+                    clip = leaveAudioClip;
+                }
+                
+                addNotification.Invoke(NotificationPanel.Current, new object[] { config.GetValue(FriendLinks) ? userId : null, message, null, backgroundColor, mainMessage, overrideProfile, clip });
+            });
+        }
+
         // Async method to fetch thumbnail from user id
         private static async Task<Uri> GetUserThumbnail(string userId)
         {
@@ -98,49 +116,35 @@ namespace UserJoinLeaveNotifications
             var thumbnail = CloudX.Shared.CloudXInterface.TryFromString(cloudUserProfile?.IconUrl) ?? NeosAssets.Graphics.Thumbnails.AnonymousHeadset;
             return thumbnail;
         }
-        
+
         private static UserBag GetUserbag(World world)
         { // Return the user bag field
             return Traverse.Create(world).Field("_users").GetValue<UserBag>();
         }
 
-        private static void AddNotification(string userId, string message, color backgroundColor, string mainMessage, Uri overrideProfile, bool UserLeaving)
-        {
-            // Not using Show Notification because it does not expose main message
-            if (addNotification == null || NotificationPanel.Current == null) return;
 
-            NotificationPanel.Current.RunSynchronously(() =>
-            { // ;-;
-                if (joinLeaveAudioClip == null)
-                {
-                    joinLeaveAudioClip = NotificationPanel.Current.Slot.AttachComponent<StaticAudioClip>();
-                    joinLeaveAudioClip.URL.Value = config.GetValue(NotificationSoundUri);
-                }
-                if (leaveAudioClip == null)
-                {
-                    leaveAudioClip = NotificationPanel.Current.Slot.AttachComponent<StaticAudioClip>();
-                    leaveAudioClip.URL.Value = config.GetValue(NotificationLeaveSoundUri);
-                }
-
-                StaticAudioClip clip = (joinLeaveAudioClip.URL.Value != null) ? joinLeaveAudioClip : null;
-
-                if (UserLeaving && config.GetValue(OverrideLeaveSound))
-                {
-                    clip = (leaveAudioClip.URL.Value != null) ? leaveAudioClip : null;
-                }
-                
-                addNotification.Invoke(NotificationPanel.Current, new object[] { config.GetValue(FriendLinks) ? userId : null, message, null, backgroundColor, mainMessage, overrideProfile, clip });
-            });
-        }
-        
         private void UpdateAssets(ConfigurationChangedEvent @event)
         {
-            if (@event.Key == NotificationSoundUri && joinLeaveAudioClip != null)
+            NotificationPanel.Current?.RunSynchronously(() => EnsureAudioClips(@event));
+        }
+
+        private static void EnsureAudioClips(ConfigurationChangedEvent @event = null)
+        {
+            if (!NotificationPanel.Current.World.CanCurrentThreadModify) return;
+
+            if (@event == null || @event.Key == NotificationSoundUri)
             {
+                if(joinLeaveAudioClip == null)
+                    joinLeaveAudioClip = NotificationPanel.Current.Slot.AttachComponent<StaticAudioClip>();
+
                 joinLeaveAudioClip.URL.Value = config.GetValue(NotificationSoundUri);
             }
-            if (@event.Key == NotificationLeaveSoundUri && leaveAudioClip != null)
+
+            if (@event == null || @event.Key == NotificationLeaveSoundUri)
             {
+                if (leaveAudioClip == null)
+                    leaveAudioClip = NotificationPanel.Current.Slot.AttachComponent<StaticAudioClip>();
+
                 leaveAudioClip.URL.Value = config.GetValue(NotificationLeaveSoundUri);
             }
         }
